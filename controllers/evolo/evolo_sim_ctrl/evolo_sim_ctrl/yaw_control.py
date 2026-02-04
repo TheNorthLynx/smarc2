@@ -16,16 +16,15 @@ class yaw_control(Node):
     def __init__(self):
         super().__init__("yaw_control")
         self.logger = self.get_logger()
-        self.logger.info("yaw_control!")
+        self.logger.info("Yaw control initiated!")
 
         self.declare_node_parameters()
 
         self.update_rate = float(self.get_parameter("update_rate").value)
         self.logger.info(f"update rate: {self.update_rate}")
-        self.logger.info("Hello from the controller!")
+        self.logger.info("Hello fromt the simulated controller!")
         self.robot_name = self.get_parameter("robot_name").value
 
-    
         self.yaw_setpoint = None
         self.yaw_setpoint_time = None
 

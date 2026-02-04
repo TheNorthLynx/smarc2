@@ -11,22 +11,31 @@ BT_LOG_MODE=compact # can be 'compact' or 'verbose'
 
 
 #Simulation
-SIM = False
-if ["$SIM" == "True"]; then
+SIM=True
+if [ "$SIM" = "True" ]
+then
     REALSIM=simulation
-    ROBOT_NAME=evolo_v1
+    ROBOT_NAME=evolo
     USE_SIM_TIME=True
+    echo "Running in simulation mode"
 else
     REALSIM=real
     #USE_SIM_TIME=False
     USE_SIM_TIME=False #Useful for rosbags
     LOCATION_SOURCE=MQTT #[SBG MQTT SERIAL]
+    echo "Running in real mode"
 fi
 
 #Low controllers
 tmux -2 new-session -d -s $SESSION -n 'controllers'
 tmux select-window -t $SESSION:0
-tmux send-keys "ros2 launch evolo_controllers evolo_controllers_launch.py"
+
+if [ "$SIM" = "True" ]
+then
+    tmux send-keys "ros2 launch evolo_sim_ctrl evolo_sim_ctrl_launch.py" C-m
+else
+    tmux send-keys "ros2 launch evolo_controllers evolo_controllers_launch.py" C-m
+fi
 
 # BT, action servers etc.
 tmux new-window -t $SESSION:1 -n 'bt'
@@ -38,9 +47,9 @@ tmux new-window -t $SESSION:2 -n 'servers'
 tmux select-window -t $SESSION:2
 tmux select-pane -t $SESSION:2.0
 tmux split-window -h -t $SESSION:2.0
-tmux split-window -v -t $SESSION:2.0
-tmux split-window -v -t $SESSION:2.1
-tmux select-layout -t $SESSION:2 tiled
+# tmux split-window -v -t $SESSION:2.0
+# tmux split-window -v -t $SESSION:2.1
+# tmux select-layout -t $SESSION:2 tiled
 
 #launch action servers
 tmux select-pane -t $SESSION:2.0
@@ -60,9 +69,9 @@ tmux select-window -t $SESSION:3
 if [ "$REALSIM" = "real" ]; then
     tmux new-window -t $SESSION:3 -n 'mqtt'
     tmux select-window -t $SESSION:3
-    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=20.240.40.232 broker_port:=1884 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT"
+    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=20.240.40.232 broker_port:=1884 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT" C-m
 else
-    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=127.0.0.1 broker_port:=1883 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT"
+    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=127.0.0.1 broker_port:=1889 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT" C-m
 fi
 
 
@@ -128,7 +137,7 @@ if [ "$REALSIM" = "real" ]; then
 else #Sim
     tmux new-window -t $SESSION:4 -n 'tcp-endpoint'
     tmux select-window -t $SESSION:4
-    tmux send-keys "ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=127.0.0.1"
+    tmux send-keys "ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=127.0.0.1" C-m
 fi
 
 if [ "$REALSIM" = "real" ]; then
@@ -146,50 +155,50 @@ if [ "$REALSIM" = "real" ]; then
     
 else #sim
     # fake health monitoring node
-    tmux new-window -t $SESSION:11 -n 'vehicle_health'
-    tmux select-window -t $SESSION:11
-    tmux split-window -h -t $SESSION:11.0
+    tmux new-window -t $SESSION:5 -n 'vehicle_health'
+    tmux select-window -t $SESSION:5
+    tmux split-window -h -t $SESSION:5.0
     
     #Health checker
-    tmux select-pane -t $SESSION:11.0
+    tmux select-pane -t $SESSION:5.0
     #tmux send-keys "TODO launch health monitoring" C-m
     tmux send-keys "ros2 topic pub -r 1 /$ROBOT_NAME/smarc/vehicle_health std_msgs/msg/Int8 '{data: 0}' " C-m
     #Geofence checker
-    tmux select-pane -t $SESSION:11.1
+    tmux select-pane -t $SESSION:5.1
     tmux send-keys "TDODO launch geofence check"
 fi
 
 #Robot description
-tmux new-window -t $SESSION:12 -n 'Robot description'
-tmux select-window -t $SESSION:12
+tmux new-window -t $SESSION:6 -n 'Robot description'
+tmux select-window -t $SESSION:6
 tmux send-keys "ros2 launch evolo_description evolo_description.launch" C-m
 
-# Perception
-tmux new-window -t $SESSION:13 -n 'Perception'
-tmux select-window -t $SESSION:13
-tmux split-window -h -t $SESSION:13.0
+# # Perception
+# tmux new-window -t $SESSION:13 -n 'Perception'
+# tmux select-window -t $SESSION:13
+# tmux split-window -h -t $SESSION:13.0
 
-#Pointcloud preprocessing
-tmux select-pane -t $SESSION:13.0
-tmux send-keys "ros2 launch pointcloud_preprocessing pointcloud_preprocessing_launch_boat.py" C-m
-#occupancy grid
-tmux select-pane -t $SESSION:13.1
-#tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME" C-m
-tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME -p DynamicStatic_clusters_segmentation:=True" C-m
+# #Pointcloud preprocessing
+# tmux select-pane -t $SESSION:13.0
+# tmux send-keys "ros2 launch pointcloud_preprocessing pointcloud_preprocessing_launch_boat.py" C-m
+# #occupancy grid
+# tmux select-pane -t $SESSION:13.1
+# #tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME" C-m
+# tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME -p DynamicStatic_clusters_segmentation:=True" C-m
 
 # Logging window.
-tmux new-window -t $SESSION:14 -n 'logging'
-tmux select-window -t $SESSION:14
+# tmux new-window -t $SESSION:14 -n 'logging'
+# tmux select-window -t $SESSION:14
 
-tmux new-window -t $SESSION:19 -n 'visualization'
-tmux select-window -t $SESSION:19
-tmux send-keys "TDODO launch rosboard"
+# tmux new-window -t $SESSION:19 -n 'visualization'
+# tmux select-window -t $SESSION:19
+# tmux send-keys "TDODO launch rosboard"
 
-tmux new-window -t $SESSION:20 -n 'zenoh router'p
-tmux select-window -t $SESSION:20
-tmux send-keys "ros2 run rmw_zenoh_cpp rmw_zenohd" C-m
+# tmux new-window -t $SESSION:20 -n 'zenoh router'p
+# tmux select-window -t $SESSION:20
+# tmux send-keys "ros2 run rmw_zenoh_cpp rmw_zenohd" C-m
 
 
 # Set default window
-tmux select-window -t $SESSION:1
+tmux select-window -t $SESSION:0
 tmux -2 attach-session -t $SESSION
