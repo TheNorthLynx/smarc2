@@ -44,7 +44,14 @@ class GentlerActionServer(SMARCActionServer):
 
 
     def goal_callback(self, goal_request) -> GoalResponse:
-        return  GoalResponse.ACCEPT if self._on_goal_received(json.loads(goal_request.goal.data)) else GoalResponse.REJECT
+        print("Hello there!")
+        print(goal_request.goal.data)
+        print(type(goal_request.goal.data))
+        in_data = goal_request.goal.data
+        new_data = in_data.replace("'", "\"")
+        print(self._on_goal_received(json.loads(new_data)))
+        print("Yo!")
+        return  GoalResponse.ACCEPT if self._on_goal_received(json.loads(new_data)) else GoalResponse.REJECT
 
 
     def cancel_callback(self, goal_handle: ServerGoalHandle) -> CancelResponse:

@@ -87,9 +87,9 @@ class EvoloMoveTo():
         self.subscriber_callback_group = ReentrantCallbackGroup()
 
         # Publishers
-        self.evolo_pub = self._node.create_publisher(Float32, controlTopics.CONTROL_YAW_TOPIC,10, callback_group=self.publisher_callback_group)
+        self.evolo_pub = self._node.create_publisher(Float32, controlTopics.CONTROL_YAW_TOPIC, 10, callback_group=self.publisher_callback_group)
         # Subscribers
-        self.robot_sub = self._node.create_subscription(Odometry, smarcTopics.ODOM_TOPIC, self.robot_odom_callback,10, callback_group=self.subscriber_callback_group)
+        self.robot_sub = self._node.create_subscription(Odometry, smarcTopics.ODOM_TOPIC, self.robot_odom_callback, 10, callback_group=self.subscriber_callback_group)
         self._node.get_logger().info("Action server started")
 
     def _on_goal_received(self, goal_request: dict) -> bool:
@@ -112,7 +112,9 @@ class EvoloMoveTo():
         lon = float(waypoint['longitude'])
         self._node.get_logger().info(f"lat lon sent to function: {lat}, {lon}")
         self.target_position = self.latlon_to_local_frame([lat,lon])
+        print(f"Target position: {self.target_position}")
         self.target_speed = speed
+        self._node.get_logger().info("Goal has been processed!")
         return True
     
     def _on_cancel_received(self) -> bool:
@@ -139,6 +141,8 @@ class EvoloMoveTo():
         if(runtime > self.timeout):
             return False # Failure
 
+        # print(f"Robot position: {self.robot_position}")
+        print(f"Robot time: {self.robot_position_time}")
         if(self.robot_position is None or (time_now - self.robot_position_time) > 10):
             self._node.get_logger().error("ERROR no robot position")
             return False
@@ -147,7 +151,13 @@ class EvoloMoveTo():
         self.distance_to_target = self.calculate_distance(self.robot_position, self.target_position)
         if(self.distance_to_target < self.target_tol):
             #TODO send speed = Stop
+            targetYaw = Float32()
+            targetYaw.data = 4711.0
+            self.evolo_pub.publish(targetYaw)
             return True
+
+        print(f"Curr pos: x 0 = {self.robot_position.pose.position.x}, y = {self.robot_position.pose.position.y}")
+        print(f"Goal pos: x 0 = {self.target_position.pose.position.x}, y = {self.target_position.pose.position.y}")
 
         targetYaw = Float32()
         dx = self.target_position.pose.position.x - self.robot_position.pose.position.x
@@ -163,7 +173,7 @@ class EvoloMoveTo():
         runtime = time_now - self.action_started_time
 
         feedback = f"Action runtime: {runtime}. DTT: {self.distance_to_target}"
-        self._node.get_logger().info(feedback)
+        # self._node.get_logger().info(feedback)
         # Here you would typically generate feedback for the action
         # This is run after each _loop_inner call
         return feedback
@@ -198,22 +208,36 @@ class EvoloMoveTo():
         pose_stamp.pose.orientation.z = quaternion_values[2]
         pose_stamp.pose.orientation.w = quaternion_values[3]
 
+        print(f"To frame: {self.frame_id}")
+        print(f"From frame: {pose_stamp.header.frame_id}")
+        frame_to = self.frame_id
+        frame_from = pose_stamp.header.frame_id
+        frame_from = 'unity_origin'
+
         t = self._tf_buffer.lookup_transform(
-                target_frame=self.frame_id,
-                source_frame=pose_stamp.header.frame_id,
+                target_frame=frame_to,
+                source_frame=frame_from,
                 time=Time(seconds=0),
                 timeout=Duration(seconds=1),
             )
-        return do_transform_pose_stamped(pose_stamp, t)
+
+        goal_in_map = do_transform_pose_stamped(pose_stamp, t)
+
+        sim = True
+        if sim:
+            goal_in_map.pose.position.x = point_list[0]
+            goal_in_map.pose.position.y = point_list[1]
+
+        return goal_in_map
 
     #Subscriber callback functions
     def robot_odom_callback(self,msg : Odometry):
-        #self._node.get_logger().info("robot position updated.")
+        # self._node.get_logger().info("robot position updated.")
         self.robot_position = PoseStamped()
         self.robot_position.header = msg.header
         self.robot_position.pose = msg.pose.pose
         self.robot_position_time = int(self._node.get_clock().now().nanoseconds * 1e-9)
-        #self._node.get_logger().info("" + str(msg.header.frame_id))
+        # self._node.get_logger().info("" + str(msg.header.frame_id))
 
     def testcase(self):
         pass
