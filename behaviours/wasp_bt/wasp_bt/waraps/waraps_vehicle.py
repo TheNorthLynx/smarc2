@@ -20,6 +20,8 @@ class WaraPSVehicle():
 
         self._logger = node.get_logger()
 
+        self._logger.info("Started the waraps evolo node.")
+
         # Publishers for Level 1 WARA-PS topics
         self._wara_ps_heartbeat_pub = node.create_publisher(String, Topics.WARA_PS_HEARTBEAT_TOPIC, 10)
         self._wara_ps_position_pub = node.create_publisher(String, Topics.WARA_PS_SENSOR_POSITION_TOPIC, 10)
@@ -33,7 +35,7 @@ class WaraPSVehicle():
 
         self._wara_ps_sensor_info_pub = node.create_publisher(String, Topics.WARA_PS_SENSOR_INFO_TOPIC, 10)
 
-        # subscribe to level 2 wara-ps topics to get info rfrom the task handler
+        # subscribe to level 2 wara-ps topics to get info from the task handler
         self._direct_exec_sub = node.create_subscription(
             String,
             Topics.WARA_PS_DIRECT_EXECUTION_INFO_TOPIC,
@@ -156,7 +158,7 @@ class WaraPSVehicle():
         msg = String()
         msg.data = json.dumps(self._heartbeat_data)
         self._wara_ps_heartbeat_pub.publish(msg)
-        # self._node.get_logger().info('Published Heartbeat message')
+        self._node.get_logger().info('Published Heartbeat message')
         
         return True
     

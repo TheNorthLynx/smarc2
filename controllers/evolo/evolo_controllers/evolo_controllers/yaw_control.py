@@ -22,6 +22,7 @@ class yaw_control(Node):
 
         self.update_rate = float(self.get_parameter("update_rate").value)
         self.logger.info(f"update rate: {self.update_rate}")
+        self.logger.info("Hello from the controller!")
         self.robot_name = self.get_parameter("robot_name").value
 
     
