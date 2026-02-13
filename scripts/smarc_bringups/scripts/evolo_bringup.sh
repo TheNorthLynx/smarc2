@@ -11,10 +11,10 @@ BT_LOG_MODE=compact # can be 'compact' or 'verbose'
 
 
 #Simulation
-SIM = False
-if ["$SIM" == "True"]; then
+SIM=True
+if [ "$SIM" = "True" ]; 
+then
     REALSIM=simulation
-    ROBOT_NAME=evolo_v1
     USE_SIM_TIME=True
 else
     REALSIM=real
@@ -26,7 +26,7 @@ fi
 #Low controllers
 tmux -2 new-session -d -s $SESSION -n 'controllers'
 tmux select-window -t $SESSION:0
-tmux send-keys "ros2 launch evolo_controllers evolo_controllers_launch.py"
+tmux send-keys "ros2 launch evolo_controllers evolo_controllers_launch.py" C-m
 
 # BT, action servers etc.
 tmux new-window -t $SESSION:1 -n 'bt'
@@ -38,9 +38,9 @@ tmux new-window -t $SESSION:2 -n 'servers'
 tmux select-window -t $SESSION:2
 tmux select-pane -t $SESSION:2.0
 tmux split-window -h -t $SESSION:2.0
-tmux split-window -v -t $SESSION:2.0
-tmux split-window -v -t $SESSION:2.1
-tmux select-layout -t $SESSION:2 tiled
+# tmux split-window -v -t $SESSION:2.0
+# tmux split-window -v -t $SESSION:2.1
+# tmux select-layout -t $SESSION:2 tiled
 
 #launch action servers
 tmux select-pane -t $SESSION:2.0
@@ -57,12 +57,13 @@ tmux new-window -t $SESSION:3 -n 'mqtt_bridge'
 tmux select-window -t $SESSION:3
 
 # To connect to smarc MQTT broker
-if [ "$REALSIM" = "real" ]; then
+if [ "$REALSIM" = "real" ]; 
+then
     tmux new-window -t $SESSION:3 -n 'mqtt'
     tmux select-window -t $SESSION:3
     tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=20.240.40.232 broker_port:=1884 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT"
 else
-    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=127.0.0.1 broker_port:=1883 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT"
+    tmux send-keys "sleep 7; ros2 launch str_json_mqtt_bridge waraps_bridge.launch broker_addr:=127.0.0.1 broker_port:=1889 robot_name:=$ROBOT_NAME domain:=$AGENT_TYPE realsim:=$REALSIM use_sim_time:=$USE_SIM_TIME context:=$CONTEXT" C-m
 fi
 
 
@@ -128,7 +129,7 @@ if [ "$REALSIM" = "real" ]; then
 else #Sim
     tmux new-window -t $SESSION:4 -n 'tcp-endpoint'
     tmux select-window -t $SESSION:4
-    tmux send-keys "ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=127.0.0.1"
+    tmux send-keys "ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=127.0.0.1" C-m
 fi
 
 if [ "$REALSIM" = "real" ]; then
@@ -146,16 +147,16 @@ if [ "$REALSIM" = "real" ]; then
     
 else #sim
     # fake health monitoring node
-    tmux new-window -t $SESSION:11 -n 'vehicle_health'
-    tmux select-window -t $SESSION:11
-    tmux split-window -h -t $SESSION:11.0
+    tmux new-window -t $SESSION:5 -n 'vehicle_health'
+    tmux select-window -t $SESSION:5
+    tmux split-window -h -t $SESSION:5.0
     
     #Health checker
-    tmux select-pane -t $SESSION:11.0
+    tmux select-pane -t $SESSION:5.0
     #tmux send-keys "TODO launch health monitoring" C-m
     tmux send-keys "ros2 topic pub -r 1 /$ROBOT_NAME/smarc/vehicle_health std_msgs/msg/Int8 '{data: 0}' " C-m
     #Geofence checker
-    tmux select-pane -t $SESSION:11.1
+    tmux select-pane -t $SESSION:5.1
     tmux send-keys "TDODO launch geofence check"
 fi
 

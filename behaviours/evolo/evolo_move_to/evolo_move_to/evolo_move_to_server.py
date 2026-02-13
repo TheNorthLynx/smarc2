@@ -186,7 +186,9 @@ class EvoloMoveTo():
         point: utm.UTMPoint = utm.fromMsg(geopoint)
         pose_stamp = PoseStamped()
         pose_stamp.pose.position = point.toPoint()
-        zone, band = point.gridZone()
+        # zone, band = point.gridZone()
+        zone = 33
+        band = 'V'
         pose_stamp.header.frame_id = f"utm_{zone}_{band}"
 
         self._node.get_logger().info(f"Utmpoint: {point}")
