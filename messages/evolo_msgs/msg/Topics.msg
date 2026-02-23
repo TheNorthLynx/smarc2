@@ -10,7 +10,7 @@ string EVOLO_CAPTAIN_STATE= captain/state
 string EVOLO_MQTT_RECEIVE = mqtt/fromevolo
 string EVOLO_MQTT_SEND = mqtt/toevolo
 
-string EVOLO_SIM_CTRL_TO = /evolo_cmd
+string EVOLO_SIM_CTRL_TO = ctrl/twist_setpoint
 
 #TODO LIDAR
 
