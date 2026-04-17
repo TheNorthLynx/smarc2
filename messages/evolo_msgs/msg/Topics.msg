@@ -13,6 +13,8 @@ string EVOLO_MQTT_SEND = mqtt/toevolo
 string EVOLO_SIM_CTRL_TO = ctrl/twist_setpoint
 
 #TODO LIDAR
+string EVOLO_OCCUPANCY_GRID = occupancyMap
+int32 EVOLO_OCCUPANCY_GRID_SIZE = 100
 
 #TDODO CAMERA & GIMBAL
 

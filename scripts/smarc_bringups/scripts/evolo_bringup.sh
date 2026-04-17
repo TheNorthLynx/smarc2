@@ -173,18 +173,18 @@ tmux new-window -t $SESSION:6 -n 'Robot description'
 tmux select-window -t $SESSION:6
 tmux send-keys "ros2 launch evolo_description evolo_description.launch" C-m
 
-# # Perception
-# tmux new-window -t $SESSION:13 -n 'Perception'
-# tmux select-window -t $SESSION:13
-# tmux split-window -h -t $SESSION:13.0
+# Perception
+tmux new-window -t $SESSION:7 -n 'Perception'
+tmux select-window -t $SESSION:7
+tmux split-window -h -t $SESSION:7.0
 
-# #Pointcloud preprocessing
-# tmux select-pane -t $SESSION:13.0
-# tmux send-keys "ros2 launch pointcloud_preprocessing pointcloud_preprocessing_launch_boat.py" C-m
-# #occupancy grid
-# tmux select-pane -t $SESSION:13.1
-# #tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME" C-m
-# tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME -p DynamicStatic_clusters_segmentation:=True" C-m
+# Pointcloud preprocessing
+tmux select-pane -t $SESSION:7.0
+tmux send-keys "ros2 launch pointcloud_preprocessing pointcloud_preprocessing_launch_boat.py use_sim_time:=$USE_SIM_TIME" C-m
+# Occupancy grid
+tmux select-pane -t $SESSION:7.1
+# tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME" C-m
+tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME -p DynamicStatic_clusters_segmentation:=True" C-m
 
 # Logging window.
 # tmux new-window -t $SESSION:14 -n 'logging'

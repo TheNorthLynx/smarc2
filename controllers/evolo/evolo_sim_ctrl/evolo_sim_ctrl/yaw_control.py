@@ -7,7 +7,7 @@ from rclpy.node import Node
 from std_msgs.msg import String, Float32
 from geometry_msgs.msg import TwistStamped
 from rclpy.executors import MultiThreadedExecutor
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, OccupancyGrid
 from geometry_msgs.msg import PoseStamped
 from tf_transformations import euler_from_quaternion
 
@@ -43,6 +43,14 @@ class yaw_control(Node):
         # Control inputs.
         self.ctrl_sub = self.create_subscription(Float32, 
                                  f"{ControlTopics.CONTROL_YAW_TOPIC}", self.yaw_cb, 1)
+        
+        # Occupancy grid
+        self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
+        self.grid = np.zeros((self.grid_size, self.grid_size))
+        self.grid_sub = self.create_subscription(OccupancyGrid, 
+                                 f"{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
+        self.logger.info(f"Reciving occupancy grid messages from {evoloTopics.EVOLO_OCCUPANCY_GRID}")
+
         # Outputs
         self.evolo_pub = self.create_publisher(TwistStamped,
                                                 f"{evoloTopics.EVOLO_SIM_CTRL_TO}", 1)
@@ -64,6 +72,16 @@ class yaw_control(Node):
     def declare_node_parameters(self):
         self.declare_parameter("update_rate", 1)
         self.declare_parameter("robot_name", "evolo")
+
+    def grid_cb(self, msg):
+        """Callback when reciving an updated occupancy grid."""
+        data = msg.data
+        for y in range(self.grid_size):
+            for x in range(self.grid_size):
+                self.grid[x, y] = data[y * self.grid_size + x]
+
+        # self.logger.info(f"Got a new grid! Data size: {len(data)}")
+        # self.logger.info(f"Grid: {self.grid}")
 
     def yaw_cb(self, msg):
         """Callback when reciving a new desired yaw"""
