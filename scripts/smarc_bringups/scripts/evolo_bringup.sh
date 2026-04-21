@@ -186,6 +186,11 @@ tmux select-pane -t $SESSION:7.1
 # tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME" C-m
 tmux send-keys "ros2 run clustering_segmentation clustering_segmentation --ros-args -p use_sim_time:=$USE_SIM_TIME -p DynamicStatic_clusters_segmentation:=True" C-m
 
+# Occupancy map clustering
+tmux new-window -t $SESSION:8 -n 'Clustering'
+tmux select-window -t $SESSION:8
+tmux send-keys "ros2 launch evolo_map_cluster evolo_map_cluster_launch.py" C-m
+
 # Logging window.
 # tmux new-window -t $SESSION:14 -n 'logging'
 # tmux select-window -t $SESSION:14

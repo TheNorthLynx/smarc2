@@ -1,0 +1,134 @@
+#! /usr/bin/env python3
+
+import math
+import rclpy
+import numpy as np
+from rclpy.node import Node
+from std_msgs.msg import String, Float32
+from geometry_msgs.msg import TwistStamped
+from rclpy.executors import MultiThreadedExecutor
+from nav_msgs.msg import Odometry, OccupancyGrid
+from geometry_msgs.msg import PoseStamped
+from tf_transformations import euler_from_quaternion
+
+from evolo_msgs.msg import Topics as evoloTopics
+from smarc_msgs.msg import Topics as smarcTopics
+from smarc_control_msgs.msg import Topics as ControlTopics
+import json
+
+
+class cluster_grid(Node):
+    """Cluster occupied areas from a occupancy grid, to provide easy input for the CBF."""
+    def __init__(self):
+        super().__init__("cluster_grid")
+        self.logger = self.get_logger()
+        self.logger.info("Occupancy map clustering initiated!")
+
+        self.declare_node_parameters()
+
+        self.update_rate = float(self.get_parameter("update_rate").value)
+        self.logger.info(f"update rate: {self.update_rate}")
+        self.robot_name = self.get_parameter("robot_name").value
+
+        # Occupancy grid
+        self.occ_limit = 70
+        
+        self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
+        self.grid = np.zeros((self.grid_size, self.grid_size))
+        self.cluster_num = 1
+        self.cluster_list = [[]]
+        self.grid_sub = self.create_subscription(OccupancyGrid, 
+                                 f"{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
+        self.logger.info(f"Reciving occupancy grid messages from {evoloTopics.EVOLO_OCCUPANCY_GRID}")
+
+        # Outputs
+        self.obstacle_pub = self.create_publisher(Odometry,
+                                                f"{evoloTopics.EVOLO_CBF_OBSTACLES}", 10)
+        self.logger.info(f"Sending obstacle messages to {evoloTopics.EVOLO_CBF_OBSTACLES}")
+
+    def declare_node_parameters(self):
+        self.declare_parameter("update_rate", 1)
+        self.declare_parameter("robot_name", "evolo")
+
+    def update(self):
+        pass
+
+    def grid_cb(self, msg):
+        """Callback when reciving an updated occupancy grid."""
+        data = msg.data
+        self.header = msg.header
+        self.grid = np.zeros((self.grid_size, self.grid_size))
+        self.cluster_num = 1
+        self.cluster_list = [[]]
+        for y in range(self.grid_size):
+            for x in range(self.grid_size):
+                if self.expand_cluster(x, y, data):
+                    self.cluster_num += 1
+                    self.cluster_list.append([])
+
+        self.send_cluster_info()
+        self.logger.info(f"Found {self.cluster_num-1} clusters.")
+        # self.logger.info(f"Got a new grid! Data size: {len(data)}")
+        # self.logger.info(f"Grid: {self.grid}")
+
+    def expand_cluster(self, x, y, data):
+        """Recursive expansion of the cluster"""
+        if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+            if self.grid[x, y] == 0 and data[y * self.grid_size + x] > self.occ_limit:
+                self.grid[x, y] = self.cluster_num
+                self.cluster_list[self.cluster_num-1].append((x, y))
+                self.expand_cluster(x + 1, y    , data)
+                self.expand_cluster(x    , y + 1, data)
+                self.expand_cluster(x - 1, y    , data)
+                self.expand_cluster(x,     y - 1, data)
+                return True
+            else:
+                return False
+        else:
+            return False
+        
+    def send_cluster_info(self):
+        """Sends the clusters as a point and a circle"""
+        for i in range(self.cluster_num-1):
+            max_x = 0
+            min_x = self.grid_size
+            max_y = 0
+            min_y = self.grid_size
+            for x, y in self.cluster_list[i]:
+                if x > max_x:
+                    max_x = x
+                if x < min_x:
+                    min_x = x
+                if y > max_y:
+                    max_y = y
+                if y < min_y:
+                    min_y = y
+            
+            center_x = 0.5 * (max_x + min_x)
+            center_y = 0.5 * (max_y + min_y)
+            add_r = 0.5 * np.sqrt(2)
+            max_r = add_r # Default for a single square
+
+            for x, y in self.cluster_list[i]:
+                r = np.sqrt((x - center_x)**2 + (x - center_y)**2) + add_r
+                if r > max_r:
+                    max_r = r
+
+            msg = Odometry()
+            msg.header = self.header
+            msg.pose.pose.position.x = center_x - 0.5 * self.grid_size
+            msg.pose.pose.position.y = center_y - 0.5 * self.grid_size
+            msg.pose.covariance[0] = max_r
+            msg.pose.covariance[7] = max_r
+            msg.pose.covariance[14] = max_r
+            self.obstacle_pub.publish(msg)
+
+
+def main(args=None, namespace=None):
+    rclpy.init(args=args)
+    cluster_node = cluster_grid()
+
+    cluster_node.create_timer(1.0/cluster_node.update_rate, cluster_node.update)
+    executor = MultiThreadedExecutor()
+    executor.add_node(cluster_node)
+    executor.spin()
