@@ -191,6 +191,11 @@ tmux new-window -t $SESSION:8 -n 'Clustering'
 tmux select-window -t $SESSION:8
 tmux send-keys "ros2 launch evolo_map_cluster evolo_map_cluster_launch.py" C-m
 
+# Occupancy map clustering
+tmux new-window -t $SESSION:9 -n 'CBF'
+tmux select-window -t $SESSION:9
+tmux send-keys "ros2 launch evolo_obstacle_avoidance evolo_obstacle_avoidance_launch.py" C-m
+
 # Logging window.
 # tmux new-window -t $SESSION:14 -n 'logging'
 # tmux select-window -t $SESSION:14

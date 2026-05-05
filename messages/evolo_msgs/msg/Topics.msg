@@ -10,11 +10,12 @@ string EVOLO_CAPTAIN_STATE= captain/state
 string EVOLO_MQTT_RECEIVE = mqtt/fromevolo
 string EVOLO_MQTT_SEND = mqtt/toevolo
 
-string EVOLO_SIM_CTRL_TO = ctrl/twist_setpoint
+string EVOLO_REQUESTED_CTRL = ctrl/requested
+string EVOLO_SAFE_CTRL = ctrl/twist_setpoint
 
 # LIDAR
-string EVOLO_OCCUPANCY_GRID = occupancyMap
 int32 EVOLO_OCCUPANCY_GRID_SIZE = 100
+string EVOLO_OCCUPANCY_GRID = occupancyMap
 string EVOLO_CBF_OBSTACLES = obstacles
 
 #TDODO CAMERA & GIMBAL

@@ -31,7 +31,7 @@ class cluster_grid(Node):
         self.robot_name = self.get_parameter("robot_name").value
 
         # Occupancy grid
-        self.occ_limit = 70
+        self.occ_limit = 50
         
         self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
         self.grid = np.zeros((self.grid_size, self.grid_size))
@@ -89,6 +89,20 @@ class cluster_grid(Node):
         
     def send_cluster_info(self):
         """Sends the clusters as a point and a circle"""
+        # If no obstacle is found, set a zero-sized obstacle at 4711 (Cologne)
+        if self.cluster_num - 1 < 1:
+            msg = Odometry()
+            msg.header = self.header
+            self.logger.info(f"Found no obstacle at time {msg.header.stamp}")
+            msg.pose.pose.position.x = 4711.0
+            msg.pose.pose.position.y = 4711.0
+            msg.pose.covariance[0] = 0.0
+            msg.pose.covariance[7] = 0.0
+            msg.pose.covariance[14] = 0.0
+            self.obstacle_pub.publish(msg)
+            return
+
+        # Calculate the size of each cluster, and construct an over-approximating circle around it
         for i in range(self.cluster_num-1):
             max_x = 0
             min_x = self.grid_size
@@ -104,24 +118,26 @@ class cluster_grid(Node):
                 if y < min_y:
                     min_y = y
             
-            center_x = 0.5 * (max_x + min_x)
-            center_y = 0.5 * (max_y + min_y)
+            center_x = 0.5 * (max_x + 1 + min_x)
+            center_y = 0.5 * (max_y + 1 + min_y)
             add_r = 0.5 * np.sqrt(2)
             max_r = add_r # Default for a single square
 
-            for x, y in self.cluster_list[i]:
-                r = np.sqrt((x - center_x)**2 + (x - center_y)**2) + add_r
-                if r > max_r:
-                    max_r = r
+            if center_x - 0.5 * self.grid_size > 0:
+                for x, y in self.cluster_list[i]:
+                    r = np.sqrt((x - center_x)**2 + (y - center_y)**2) + add_r
+                    if r > max_r:
+                        max_r = r
 
-            msg = Odometry()
-            msg.header = self.header
-            msg.pose.pose.position.x = center_x - 0.5 * self.grid_size
-            msg.pose.pose.position.y = center_y - 0.5 * self.grid_size
-            msg.pose.covariance[0] = max_r
-            msg.pose.covariance[7] = max_r
-            msg.pose.covariance[14] = max_r
-            self.obstacle_pub.publish(msg)
+                msg = Odometry()
+                msg.header = self.header
+                msg.pose.pose.position.x = center_x - 0.5 * self.grid_size
+                msg.pose.pose.position.y = center_y - 0.5 * self.grid_size
+                msg.pose.covariance[0] = max_r
+                msg.pose.covariance[7] = max_r
+                msg.pose.covariance[14] = max_r
+                self.logger.info(f"Obstacle at x: {msg.pose.pose.position.x}, y: {msg.pose.pose.position.y}, r: {max_r}")
+                self.obstacle_pub.publish(msg)
 
 
 def main(args=None, namespace=None):
