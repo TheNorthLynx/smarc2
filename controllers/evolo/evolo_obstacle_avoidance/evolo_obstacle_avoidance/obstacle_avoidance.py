@@ -62,7 +62,7 @@ class cbf_avoidance(Node):
         self.halfplane_pub = self.create_publisher(MarkerArray, "cbfHalfplanes", self.max_n_obst)
 
         # CBF parameters
-        self.agent_radius = 6.0
+        self.agent_radius = 2.0
         self.w_max = 30.0
         self.u_max = self.w_max * np.pi / 180
         self.w_max_virtual = 7.0
@@ -249,6 +249,16 @@ class cbf_avoidance(Node):
         p2.y = y_mid - self.halfplane_length * np.cos(th_opt)
         p2.z = 0.0
 
+        p3 = Point()
+        p3.x = x_mid
+        p3.y = y_mid
+        p3.z = 0.0
+
+        p4 = Point()
+        p4.x = self.obst_list[obst_i, 0]
+        p4.y = self.obst_list[obst_i, 1]
+        p4.z = 0.0
+
         # Construct the message and publish
 
         hp = Marker()
@@ -275,6 +285,8 @@ class cbf_avoidance(Node):
 
         hp.points.append(p1)
         hp.points.append(p2)
+        hp.points.append(p3)
+        hp.points.append(p4)
 
         self.halfplane_array.markers.append(hp)
         self.halfplane_pub.publish(self.halfplane_array)

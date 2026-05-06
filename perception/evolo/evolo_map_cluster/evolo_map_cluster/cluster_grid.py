@@ -8,6 +8,7 @@ from std_msgs.msg import String, Float32
 from geometry_msgs.msg import TwistStamped
 from rclpy.executors import MultiThreadedExecutor
 from nav_msgs.msg import Odometry, OccupancyGrid
+from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PoseStamped
 from tf_transformations import euler_from_quaternion
 
@@ -32,6 +33,7 @@ class cluster_grid(Node):
 
         # Occupancy grid
         self.occ_limit = 50
+        self.obstacle_closeness_limit = 3
         
         self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
         self.grid = np.zeros((self.grid_size, self.grid_size))
@@ -45,6 +47,10 @@ class cluster_grid(Node):
         self.obstacle_pub = self.create_publisher(Odometry,
                                                 f"{evoloTopics.EVOLO_CBF_OBSTACLES}", 10)
         self.logger.info(f"Sending obstacle messages to {evoloTopics.EVOLO_CBF_OBSTACLES}")
+
+        # Nicer obstacle publisher for rviz
+        self.rviz_obs_array = MarkerArray()
+        self.rviz_obs_pub = self.create_publisher(MarkerArray, "rvizObstacles", 1)
 
     def declare_node_parameters(self):
         self.declare_parameter("update_rate", 1)
@@ -103,6 +109,7 @@ class cluster_grid(Node):
             return
 
         # Calculate the size of each cluster, and construct an over-approximating circle around it
+        self.rviz_obs_array = MarkerArray()
         for i in range(self.cluster_num-1):
             max_x = 0
             min_x = self.grid_size
@@ -123,7 +130,14 @@ class cluster_grid(Node):
             add_r = 0.5 * np.sqrt(2)
             max_r = add_r # Default for a single square
 
-            if center_x - 0.5 * self.grid_size > 0:
+            # Calculate coorinates in agent's frame
+            obs_x = center_x - 0.5 * self.grid_size
+            obs_y = center_y - 0.5 * self.grid_size
+
+            # Calculate radial distance to obstacle
+            obs_r = np.sqrt(obs_x**2 + obs_y**2)
+
+            if obs_x > 0 and obs_r > self.obstacle_closeness_limit:
                 for x, y in self.cluster_list[i]:
                     r = np.sqrt((x - center_x)**2 + (y - center_y)**2) + add_r
                     if r > max_r:
@@ -131,13 +145,41 @@ class cluster_grid(Node):
 
                 msg = Odometry()
                 msg.header = self.header
-                msg.pose.pose.position.x = center_x - 0.5 * self.grid_size
-                msg.pose.pose.position.y = center_y - 0.5 * self.grid_size
+                msg.pose.pose.position.x = obs_x
+                msg.pose.pose.position.y = obs_y
                 msg.pose.covariance[0] = max_r
                 msg.pose.covariance[7] = max_r
                 msg.pose.covariance[14] = max_r
                 self.logger.info(f"Obstacle at x: {msg.pose.pose.position.x}, y: {msg.pose.pose.position.y}, r: {max_r}")
                 self.obstacle_pub.publish(msg)
+
+                # Same but for rviz
+                obs_msg = Marker()
+                obs_msg.header = self.header
+
+                obs_msg.ns = "obstacles"
+                obs_msg.id = i
+                obs_msg.type = Marker.SPHERE
+                obs_msg.action = Marker.ADD
+
+                obs_msg.pose.position.x = obs_x
+                obs_msg.pose.position.y = obs_y
+                obs_msg.pose.position.z = 0.0
+                
+                obs_msg.scale.x = max_r * 2.0  # Diameter
+                obs_msg.scale.y = max_r * 2.0
+                obs_msg.scale.z = max_r * 2.0
+
+                obs_msg.color.r = 0.0
+                obs_msg.color.g = 0.0
+                obs_msg.color.b = 1.0
+                obs_msg.color.a = 1.0
+
+                obs_msg.lifetime.sec = 3
+                obs_msg.lifetime.nanosec = 0
+
+                self.rviz_obs_array.markers.append(obs_msg)
+        self.rviz_obs_pub.publish(self.rviz_obs_array)
 
 
 def main(args=None, namespace=None):

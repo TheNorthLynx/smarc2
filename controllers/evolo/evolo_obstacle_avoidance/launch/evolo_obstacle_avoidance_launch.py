@@ -14,7 +14,7 @@ def generate_launch_description():
         'robot_name',
         default_value='evolo'
     )
-
+    # TODO: Add topics to use here!
     cbf = Node(
         package='evolo_obstacle_avoidance',
         namespace=robot_ns,
