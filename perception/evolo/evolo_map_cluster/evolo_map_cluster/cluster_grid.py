@@ -32,15 +32,16 @@ class cluster_grid(Node):
         self.robot_name = self.get_parameter("robot_name").value
 
         # Occupancy grid
-        self.occ_limit = 50
+        self.occ_limit = 40
         self.obstacle_closeness_limit = 3
+        self.reduce_search = 20
         
         self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
         self.grid = np.zeros((self.grid_size, self.grid_size))
         self.cluster_num = 1
         self.cluster_list = [[]]
         self.grid_sub = self.create_subscription(OccupancyGrid, 
-                                 f"{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
+                                 f"/{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
         self.logger.info(f"Reciving occupancy grid messages from {evoloTopics.EVOLO_OCCUPANCY_GRID}")
 
         # Outputs
@@ -66,8 +67,8 @@ class cluster_grid(Node):
         self.grid = np.zeros((self.grid_size, self.grid_size))
         self.cluster_num = 1
         self.cluster_list = [[]]
-        for y in range(self.grid_size):
-            for x in range(self.grid_size):
+        for y in range(self.reduce_search, self.grid_size - self.reduce_search):
+            for x in range(self.reduce_search, self.grid_size - self.reduce_search):
                 if self.expand_cluster(x, y, data):
                     self.cluster_num += 1
                     self.cluster_list.append([])
