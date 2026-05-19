@@ -57,7 +57,7 @@ class cbf_avoidance(Node):
         self.logger.info(f"Sending ctrl messages to {self.robot_name}/{evoloTopics.EVOLO_SAFE_CTRL}")
 
         # CBF halfplane publisher
-        self.halfplane_length = 20.0
+        self.halfplane_length = 40.0
         self.halfplane_array = MarkerArray()
         self.halfplane_pub = self.create_publisher(MarkerArray, "cbfHalfplanes", self.max_n_obst)
 
@@ -253,12 +253,12 @@ class cbf_avoidance(Node):
 
         # Then extend the line
         p1 = Point()
-        p1.x = x_mid + self.halfplane_length * np.sin(th_opt)
+        p1.x = x_mid - self.halfplane_length * np.sin(th_opt)
         p1.y = y_mid + self.halfplane_length * np.cos(th_opt)
         p1.z = 0.0
         
         p2 = Point()
-        p2.x = x_mid - self.halfplane_length * np.sin(th_opt)
+        p2.x = x_mid + self.halfplane_length * np.sin(th_opt)
         p2.y = y_mid - self.halfplane_length * np.cos(th_opt)
         p2.z = 0.0
 
@@ -282,7 +282,7 @@ class cbf_avoidance(Node):
         hp.type = Marker.LINE_STRIP
         hp.action = Marker.ADD
 
-        hp.scale.x = 0.05  # line width
+        hp.scale.x = 0.15  # line width
 
         if mu > 0:
             hp.color.r = 0.0
@@ -293,7 +293,7 @@ class cbf_avoidance(Node):
         hp.color.b = 0.0
         hp.color.a = 1.0
 
-        hp.lifetime.sec = 1
+        hp.lifetime.sec = 5
         hp.lifetime.nanosec = 0
 
         hp.points.append(p1)
