@@ -7,7 +7,7 @@ from rclpy.node import Node
 from std_msgs.msg import String, Float32
 from geometry_msgs.msg import TwistStamped
 from rclpy.executors import MultiThreadedExecutor
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PoseStamped, Polygon, Point, PolygonStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from tf_transformations import euler_from_quaternion
@@ -61,7 +61,13 @@ class cbf_avoidance(Node):
         self.halfplane_array = MarkerArray()
         self.halfplane_pub = self.create_publisher(MarkerArray, "cbfHalfplanes", self.max_n_obst)
 
+        # Safe path publisher
+        self.safe_steps = 30
+        self.safe_dt = 0.5
+        self.safe_path_pub = self.create_publisher(Path, "rviz/safe_path", 1)
+
         # CBF parameters
+        self.is_sim = False
         self.agent_radius = 2.0
         self.w_max = 30.0
         self.u_max = self.w_max * np.pi / 180
@@ -97,7 +103,10 @@ class cbf_avoidance(Node):
         """Callback when reciving a new desired yaw"""
         # Recive the message
         self.u_des = msg
-        w_des = self.u_des.twist.angular.z * np.pi / 180
+        if self.is_sim:
+            w_des = self.u_des.twist.angular.z * np.pi / 180
+        else:
+            w_des = self.u_des.twist.angular.z
         self.agent_speed = msg.twist.linear.x
         
         # Apply the CBF
@@ -106,9 +115,13 @@ class cbf_avoidance(Node):
         # Publish the safe control
         u_safe = TwistStamped()
         u_safe.twist.linear.x = msg.twist.linear.x
-        u_safe.twist.angular.z = w_safe * 180 / (self.w_max_scale * np.pi)
+        if self.is_sim:
+            u_safe.twist.angular.z = w_safe * 180 / (self.w_max_scale * np.pi)
+        else:
+            u_safe.twist.angular.z = w_safe
         self.logger.info(f"Sending lx = {u_safe.twist.linear.x}, az = {u_safe.twist.angular.z}, having {self.n_obst} obstacles")
         self.safe_ctrl_pub.publish(u_safe)
+        self.extrapolate_path(w_safe)
     
     def calc_safe_control(self, w_des):
         """To handle multiple obstacles"""
@@ -291,6 +304,35 @@ class cbf_avoidance(Node):
         self.halfplane_array.markers.append(hp)
         self.halfplane_pub.publish(self.halfplane_array)
 
+    def extrapolate_path(self, ctrl):
+        """Extrapolates the path given the given control"""
+        if self.obst_header is not None:
+            # Current pose in the agent's frame
+            x = 0.0
+            y = 0.0
+            w = 0.0
+
+            # Set up the message
+            safe_path = Path()
+            safe_path.header = self.obst_header
+            p0 = PoseStamped()
+            p0.header = self.obst_header
+            p0.pose.position.x = x
+            p0.pose.position.y = y
+            safe_path.poses.append(p0)
+
+            # Extrapolate path
+            for _ in range(self.safe_steps):
+                x += self.safe_dt * self.agent_speed * np.cos(w)
+                y += self.safe_dt * self.agent_speed * np.sin(w)
+                w += self.safe_dt * ctrl
+                p = PoseStamped()
+                p.header = self.obst_header
+                p.pose.position.x = x
+                p.pose.position.y = y
+                safe_path.poses.append(p)
+
+            self.safe_path_pub.publish(safe_path)
 
     def update(self):
         pass
