@@ -42,8 +42,6 @@ class cluster_grid(Node):
         self.grid = np.zeros((self.grid_size, self.grid_size))
         self.cluster_num = 1
         self.cluster_list = [[]]
-        self.cluster_certainty = 0
-        self.cluster_size = 0
         self.grid_sub = self.create_subscription(OccupancyGrid, 
                                  f"/{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
         self.logger.info(f"Reciving occupancy grid messages from {evoloTopics.EVOLO_OCCUPANCY_GRID}")
@@ -74,10 +72,8 @@ class cluster_grid(Node):
         
         for y in range(self.reduce_search, self.grid_size - self.reduce_search):
             for x in range(self.reduce_search, self.grid_size - self.reduce_search):
-                self.cluster_size = 0
-                self.cluster_certainty = 0
                 self.cluster_list[-1] = []
-                if self.expand_cluster(x, y, data) and self.cluster_certainty >= self.cluster_limit:
+                if self.expand_cluster(x, y, data):
                     self.cluster_num += 1
                     self.cluster_list.append([])
 
@@ -86,28 +82,31 @@ class cluster_grid(Node):
         # self.logger.info(f"Got a new grid! Data size: {len(data)}")
         # self.logger.info(f"Grid: {self.grid}")
 
-    # TODO: Make a list based cluster
-    def expand_cluster(self, x, y, data):
-        """Recursive expansion of the cluster"""
-        if self.cluster_size > self.max_cluster_size:
-            return False
-        if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
-            # Check if clamied by other cluster and above occupied limit
-            if self.grid[x, y] == 0 and data[y * self.grid_size + x] > self.occ_limit:
-                self.cluster_size += 1
-                self.cluster_certainty += data[y * self.grid_size + x]
-                self.cluster_list[-1].append((x, y))
-                self.grid[x, y] = self.cluster_num
-                
-                self.expand_cluster(x + 1, y    , data)
-                self.expand_cluster(x    , y + 1, data)
-                self.expand_cluster(x - 1, y    , data)
-                self.expand_cluster(x,     y - 1, data)
-                return True
-            else:
-                return False
-        else:
-            return False
+    def expand_cluster(self, first_x, first_y, data):
+        """List based expansion of the cluster"""
+        potential_cells = [[first_x, first_y]]
+        cluster_certainty = 0
+
+        for i in range(self.max_cluster_size):
+            if i >= len(potential_cells):
+                break
+            x, y = potential_cells[i]
+            if 0 <= x < self.grid_size and 0 <= y < self.grid_size:
+                # Check if clamied by other cluster and above occupied limit
+                if self.grid[x, y] == 0 and data[y * self.grid_size + x] > self.occ_limit:
+                    cluster_certainty += data[y * self.grid_size + x]
+                    self.cluster_list[-1].append((x, y))
+                    self.grid[x, y] = self.cluster_num
+                    
+                    potential_cells.append([x + 1, y    ])
+                    potential_cells.append([x    , y + 1])
+                    potential_cells.append([x - 1, y    ])
+                    potential_cells.append([x,     y - 1])
+
+        if cluster_certainty >= self.cluster_limit:
+            return True
+        return False
+   
         
     def send_cluster_info(self):
         """Sends the clusters as a point and a circle"""
