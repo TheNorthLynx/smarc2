@@ -35,7 +35,7 @@ class cluster_grid(Node):
         self.occ_limit = 30 # Limit for a single square
         self.cluster_limit = 80 # Limit for a cluster
         self.obstacle_closeness_limit = 3
-        self.reduce_search = 0
+        self.reduce_search = 20
         self.max_cluster_size = 100
         
         self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
