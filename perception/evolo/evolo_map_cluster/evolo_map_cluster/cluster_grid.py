@@ -12,7 +12,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PoseStamped
 from tf_transformations import euler_from_quaternion
 
-from evolo_msgs.msg import Topics as evoloTopics
 from smarc_msgs.msg import Topics as smarcTopics
 from smarc_control_msgs.msg import Topics as ControlTopics
 import json
@@ -37,19 +36,21 @@ class cluster_grid(Node):
         self.obstacle_closeness_limit = 3
         self.reduce_search = 20
         self.max_cluster_size = 100
-        
-        self.grid_size = evoloTopics.EVOLO_OCCUPANCY_GRID_SIZE
+        self.grid_size = 200
+
         self.grid = np.zeros((self.grid_size, self.grid_size))
         self.cluster_num = 1
         self.cluster_list = [[]]
+        self.grid_topic = self.get_parameter("grid_topic").value
         self.grid_sub = self.create_subscription(OccupancyGrid, 
-                                 f"/{evoloTopics.EVOLO_OCCUPANCY_GRID}", self.grid_cb, 1)
-        self.logger.info(f"Reciving occupancy grid messages from {evoloTopics.EVOLO_OCCUPANCY_GRID}")
+                                 f"/{self.grid_topic}", self.grid_cb, 1)
+        self.logger.info(f"Reciving occupancy grid messages from /{self.grid_topic}")
 
         # Outputs
+        self.obstacle_topic = self.get_parameter("obstacle_topic").value
         self.obstacle_pub = self.create_publisher(Odometry,
-                                                f"{evoloTopics.EVOLO_CBF_OBSTACLES}", 10)
-        self.logger.info(f"Sending obstacle messages to {evoloTopics.EVOLO_CBF_OBSTACLES}")
+                                                f"{self.obstacle_topic}", 10)
+        self.logger.info(f"Sending obstacle messages to /{self.robot_name}/{self.obstacle_topic}")
 
         # Nicer obstacle publisher for rviz
         self.rviz_obs_array = MarkerArray()
@@ -57,7 +58,9 @@ class cluster_grid(Node):
 
     def declare_node_parameters(self):
         self.declare_parameter("update_rate", 1)
-        self.declare_parameter("robot_name", "evolo")
+        self.declare_parameter("robot_name", "")
+        self.declare_parameter("grid_topic", "")
+        self.declare_parameter("obstacle_topic", "")
 
     def update(self):
         pass
@@ -79,8 +82,6 @@ class cluster_grid(Node):
 
         self.send_cluster_info()
         self.logger.info(f"Found {self.cluster_num-1} clusters.")
-        # self.logger.info(f"Got a new grid! Data size: {len(data)}")
-        # self.logger.info(f"Grid: {self.grid}")
 
     def expand_cluster(self, first_x, first_y, data):
         """List based expansion of the cluster"""

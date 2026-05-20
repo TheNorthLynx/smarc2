@@ -12,7 +12,6 @@ from geometry_msgs.msg import PoseStamped, Polygon, Point, PolygonStamped
 from visualization_msgs.msg import Marker, MarkerArray
 from tf_transformations import euler_from_quaternion
 
-from evolo_msgs.msg import Topics as evoloTopics
 from smarc_msgs.msg import Topics as smarcTopics
 from smarc_control_msgs.msg import Topics as ControlTopics
 import json
@@ -37,9 +36,10 @@ class cbf_avoidance(Node):
         # Requested control input sub
         self.u_des = TwistStamped()
         self.agent_speed = 0.0
+        self.requested_ctrl_topic = self.get_parameter("requested_ctrl_topic").value
         self.requested_ctrl_sub = self.create_subscription(TwistStamped, 
-                                 f"{evoloTopics.EVOLO_REQUESTED_CTRL}", self.requested_ctrl_cb, 1)
-        self.logger.info(f"Reciving requested control messages from {self.robot_name}/{evoloTopics.EVOLO_REQUESTED_CTRL}")
+                                 f"{self.requested_ctrl_topic}", self.requested_ctrl_cb, 1)
+        self.logger.info(f"Reciving requested control messages from /{self.robot_name}/{self.requested_ctrl_topic}")
         
         # Obstacle sub
         self.max_n_obst = 10
@@ -47,19 +47,21 @@ class cbf_avoidance(Node):
         self.n_obst = 0
         self.obst_list = np.zeros((self.max_n_obst, 3))
         self.obst_header = None
+        self.obstacle_topic = self.get_parameter("obstacle_topic").value
         self.obstacle_sub = self.create_subscription(Odometry, 
-                                 f"{evoloTopics.EVOLO_CBF_OBSTACLES}", self.obstacle_cb, self.max_n_obst)
-        self.logger.info(f"Reciving obstacle messages from {self.robot_name}/{evoloTopics.EVOLO_CBF_OBSTACLES}")
+                                 f"{self.obstacle_topic}", self.obstacle_cb, self.max_n_obst)
+        self.logger.info(f"Reciving obstacle messages from /{self.robot_name}/{self.obstacle_topic}")
 
         # Output
+        self.safe_ctrl_topic = self.get_parameter("safe_ctrl_topic").value
         self.safe_ctrl_pub = self.create_publisher(TwistStamped,
-                                                f"{evoloTopics.EVOLO_SAFE_CTRL}", 1)
-        self.logger.info(f"Sending ctrl messages to {self.robot_name}/{evoloTopics.EVOLO_SAFE_CTRL}")
+                                                f"{self.safe_ctrl_topic}", 1)
+        self.logger.info(f"Sending ctrl messages to /{self.robot_name}/{self.safe_ctrl_topic}")
 
         # CBF halfplane publisher
         self.halfplane_length = 40.0
         self.halfplane_array = MarkerArray()
-        self.halfplane_pub = self.create_publisher(MarkerArray, "cbfHalfplanes", self.max_n_obst)
+        self.halfplane_pub = self.create_publisher(MarkerArray, "rviz/cbfHalfplanes", self.max_n_obst)
 
         # Safe path publisher
         self.safe_steps = 30
@@ -79,7 +81,10 @@ class cbf_avoidance(Node):
 
     def declare_node_parameters(self):
         self.declare_parameter("update_rate", 1)
-        self.declare_parameter("robot_name", "evolo")
+        self.declare_parameter("robot_name", "")
+        self.declare_parameter("requested_ctrl_topic", "")
+        self.declare_parameter("obstacle_topic", "")
+        self.declare_parameter("safe_ctrl_topic", "")
 
     def obstacle_cb(self, msg):
         """Callback when reciving a new obstacle."""
@@ -293,7 +298,7 @@ class cbf_avoidance(Node):
         hp.color.b = 0.0
         hp.color.a = 1.0
 
-        hp.lifetime.sec = 5
+        hp.lifetime.sec = 1
         hp.lifetime.nanosec = 0
 
         hp.points.append(p1)
