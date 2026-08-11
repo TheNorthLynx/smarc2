@@ -19,6 +19,7 @@ def generate_launch_description():
     p_value = LaunchConfiguration('p_value')
     alpha_value = LaunchConfiguration('alpha_value')
     robot_radius = LaunchConfiguration('robot_radius')
+    cbf_opt_res = LaunchConfiguration('cbf_opt_res')
 
     robot_ns_launch_arg = DeclareLaunchArgument(
         'robot_name',
@@ -31,6 +32,7 @@ def generate_launch_description():
     p_value_arg = DeclareLaunchArgument('p_value', default_value="0.5")
     alpha_value_arg = DeclareLaunchArgument('alpha_value', default_value="1.0")
     robot_radius_arg = DeclareLaunchArgument('robot_radius', default_value="2.0")
+    cbf_opt_res_arg = DeclareLaunchArgument('cbf_opt_res', default_value="11")
 
     cbf = Node(
         package='evolo_obstacle_avoidance',
@@ -45,6 +47,7 @@ def generate_launch_description():
                      "p_value": p_value,
                      "alpha_value": alpha_value,
                      "robot_radius": robot_radius,
+                     "cbf_opt_res": cbf_opt_res,
                      }]
     )
 
@@ -57,5 +60,6 @@ def generate_launch_description():
         p_value_arg,
         alpha_value_arg,
         robot_radius_arg,
+        cbf_opt_res_arg,
         cbf
     ])

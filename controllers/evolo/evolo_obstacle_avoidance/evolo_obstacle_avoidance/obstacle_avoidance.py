@@ -85,8 +85,9 @@ class cbf_avoidance(Node):
 
         # CBF parameters
         self.agent_radius = float(self.get_parameter("robot_radius").value)
+        self.optimisation_res = int(self.get_parameter("cbf_opt_res").value)
         self.alpha_value = float(self.get_parameter("alpha_value").value)
-        self.logger.info(f"Agent radius: {self.agent_radius} m, cbf alpha: {self.alpha_value}")
+        self.logger.info(f"Agent radius: {self.agent_radius} m, cbf res: {self.optimisation_res}, cbf alpha: {self.alpha_value}")
 
         self.p = float(self.get_parameter("p_value").value) # Of the simulated P-controller
         self.max_yaw_diff = float(self.get_parameter("max_yaw_diff").value) # In [deg/s]
@@ -112,6 +113,7 @@ class cbf_avoidance(Node):
         self.declare_parameter("p_value", 1.0)
         self.declare_parameter("alpha_value", 1.0)
         self.declare_parameter("robot_radius", 1.0)
+        self.declare_parameter("cbf_opt_res", 1)
 
     def odom_cb(self, msg : Odometry):
         """Get current heading."""
@@ -294,7 +296,7 @@ class cbf_avoidance(Node):
                 self.th_mid = float(np.arctan2(x[1] - o[1], x[0] - o[0]))
 
                 # Find optimal plane orientation for each obstacle
-                u, _, h = self.part_circle_grid(w_des, i, mu)
+                u, _, h = self.part_circle_grid(w_des, i, mu, self.optimisation_res)
                 self.logger.info(f"Safe control: {u}")
                 u_diff = np.abs(u - w_des)
                 if u_diff > max_u_diff:

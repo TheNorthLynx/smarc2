@@ -234,8 +234,8 @@ col(
 
 #Obstacle avoidance
 if [ $OBSTACLE_AVOIDANCE == "True" ]; then
-    OBSTACLE_AVOIDANCE_CMD="ros2 launch evolo_obstacle_avoidance evolo_obstacle_avoidance_launch.py"
-    CLUSTERING_CMD="ros2 launch evolo_map_cluster evolo_map_cluster_launch.py"
+    OBSTACLE_AVOIDANCE_CMD="ros2 launch evolo_obstacle_avoidance evolo_obstacle_avoidance_launch.py max_yaw_diff:="40.0" p_value:="0.5" alpha_value:="1.0" robot_radius:="2.0""
+    CLUSTERING_CMD="ros2 launch evolo_ghost_obstacles evolo_ghost_obstacles_launch.py obstacle_radius:="20.0" time_to_collision:="10.0" obstacle_angle:="1.5708" obstacle_speed:="0.0""
     tmux_make_layout "$SESSION" Obstacle-avoidance "
     col(
         var(OBSTACLE_AVOIDANCE_CMD),
