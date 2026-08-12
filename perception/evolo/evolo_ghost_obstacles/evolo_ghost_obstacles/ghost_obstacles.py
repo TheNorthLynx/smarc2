@@ -7,7 +7,7 @@ import numpy as np
 from rclpy.node import Node
 from rclpy.time import Duration, Time
 from std_msgs.msg import String, Float32
-from geometry_msgs.msg import TwistStamped
+from geometry_msgs.msg import Twist, TwistStamped
 from rosgraph_msgs.msg import Clock
 from rclpy.executors import MultiThreadedExecutor
 from nav_msgs.msg import Odometry, OccupancyGrid
@@ -37,6 +37,7 @@ class ghost_obstacles(Node):
         self.robot_name = self.get_parameter("robot_name").value
 
         # Keep track of Evolo using TF2
+        self.target_frame = "evolo/odom"
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(
             self.tf_buffer, self, spin_thread=True
@@ -45,6 +46,10 @@ class ghost_obstacles(Node):
         # Keep track of time
         self.current_time = None
         self.clock_sub = self.create_subscription(Clock, "/clock", self.clock_cb, 10)
+
+        # Get obstacle info from QGIS
+        self.obstacle_is_active = False
+        self.ghost_sub = self.create_subscription(Twist, "/evolo/activate_ghost", self.ghost_cb, 10)
 
         # Relay control to Unity
         unity_sim = True
@@ -59,12 +64,23 @@ class ghost_obstacles(Node):
                                                 f"{self.obstacle_topic}", 10)
         self.logger.info(f"Sending obstacle messages to /{self.robot_name}/{self.obstacle_topic}")
 
+        time.sleep(10.0)
+
+    def clock_cb(self, msg):
+        self.current_time = msg.clock
+
+    def ghost_cb(self, msg):
+        """Calculate the initial position of the obstacle"""
+        self.obstacle_is_active = True
+
+        # Get the parameters from the ghost message
+        self.radius = msg.linear.x
+        self.obstacle_speed = msg.linear.y
+        time_to_collision = msg.linear.z
+        self.obstacle_angle = msg.angular.x
+
         # Calculate start and end point of the obstacles path in Evolo frame
-        self.radius = float(self.get_parameter("obstacle_radius").value) # [m]
         evolo_speed = 4.5 # [m/s]
-        time_to_collision = float(self.get_parameter("time_to_collision").value) # [s]
-        self.obstacle_angle = float(self.get_parameter("obstacle_angle").value) # [rad]
-        self.obstacle_speed = float(self.get_parameter("obstacle_speed").value) # [m/s]
         self.t = 0 # [s]
         self.t_tot = time_to_collision * 2
         self.logger.info(f"Radius: {self.radius}, time to collision: {time_to_collision}, angle: {self.obstacle_angle}, speed: {self.obstacle_speed}")
@@ -98,7 +114,6 @@ class ghost_obstacles(Node):
         no_TF_start = True
         no_TF_goal = True
 
-        self.target_frame = "evolo/odom"
         while no_TF_goal or no_TF_start:
             try:
                 self.start_point.header.stamp = self.current_time
@@ -134,9 +149,6 @@ class ghost_obstacles(Node):
                 self.get_logger().error(f"Goal transform failed: {e}")
                 time.sleep(3.0)
 
-    def clock_cb(self, msg):
-        self.current_time = msg.clock
-
     def declare_node_parameters(self):
         self.declare_parameter("update_rate", 1)
         self.declare_parameter("robot_name", "")
@@ -149,26 +161,27 @@ class ghost_obstacles(Node):
 
     def update(self):
         """Calculate the updated position of the obstacle in odom frame, then send it"""
-        self.t += 1.0
-        t_frac = self.t / self.t_tot
+        if self.obstacle_is_active:
+            self.t += 1.0
+            t_frac = self.t / self.t_tot
 
-        obstacle_msg = Odometry()
-        obstacle_msg.header.frame_id = self.target_frame
-        obstacle_msg.header.stamp = self.current_time
-        obstacle_msg.header.stamp.sec -= 1
+            obstacle_msg = Odometry()
+            obstacle_msg.header.frame_id = self.target_frame
+            obstacle_msg.header.stamp = self.current_time
+            obstacle_msg.header.stamp.sec -= 1
 
-        obstacle_msg.pose.covariance[0] = self.radius
-        obstacle_msg.pose.covariance[7] = self.radius
-        obstacle_msg.pose.covariance[14] = self.radius
+            obstacle_msg.pose.covariance[0] = self.radius
+            obstacle_msg.pose.covariance[7] = self.radius
+            obstacle_msg.pose.covariance[14] = self.radius
 
-        obstacle_msg.pose.pose.position.x = self.start_point.point.x * (1 - t_frac) + self.goal_point.point.x * t_frac
-        obstacle_msg.pose.pose.position.y = self.start_point.point.y * (1 - t_frac) + self.goal_point.point.y * t_frac
+            obstacle_msg.pose.pose.position.x = self.start_point.point.x * (1 - t_frac) + self.goal_point.point.x * t_frac
+            obstacle_msg.pose.pose.position.y = self.start_point.point.y * (1 - t_frac) + self.goal_point.point.y * t_frac
 
-        obstacle_msg.twist.twist.linear.x = self.x_vel
-        obstacle_msg.twist.twist.linear.y = self.y_vel
+            obstacle_msg.twist.twist.linear.x = self.x_vel
+            obstacle_msg.twist.twist.linear.y = self.y_vel
 
-        self.obstacle_pub.publish(obstacle_msg)
-        self.logger.info(f"Updating obstacle position to x: {obstacle_msg.pose.pose.position.x}, y: {obstacle_msg.pose.pose.position.y}")
+            self.obstacle_pub.publish(obstacle_msg)
+            self.logger.info(f"Updating obstacle position to x: {obstacle_msg.pose.pose.position.x}, y: {obstacle_msg.pose.pose.position.y}")
 
     def ctrl_cb(self, msg):
         """Relays control to unity simulator"""

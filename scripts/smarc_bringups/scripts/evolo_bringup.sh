@@ -185,6 +185,7 @@ DEPLOY_ACTION_CMD="ros2 run evolo_deploy evolo_deploy_server --ros-args -r __ns:
 DEPLOY_AT_ACTION_CMD="ros2 run evolo_deploy_at evolo_deploy_at_server --ros-args -r __ns:=/$ROBOT_NAME -p use_sim_time:=$USE_SIM_TIME"
 SEARCH_AREA_ACTION_CMD="ros2 run search_areas search_area --ros-args -r __ns:=/evolo --params-file $(ros2 pkg prefix search_areas)/share/search_areas/config/search_area.yaml"
 SEARCH_AREAS_ACTION_CMD="ros2 run search_areas search_areas --ros-args -r __ns:=/evolo"
+ACTIVATE_GHOST_CMD="ros2 run evolo_activate_ghost evolo_activate_ghost_server --ros-args -r __ns:=/$ROBOT_NAME -p use_sim_time:=$USE_SIM_TIME"
 
 tmux_make_layout "$SESSION" Actions "
 col(
@@ -197,7 +198,8 @@ col(
     row(
         var(EXTERNAL_CTRL_ACTION_CMD),
         var(DEPLOY_AT_ACTION_CMD),
-        var(DEPLOY_ACTION_CMD)
+        var(DEPLOY_ACTION_CMD),
+        var(ACTIVATE_GHOST_CMD)
     )
 )"
 
