@@ -91,14 +91,14 @@ class ghost_obstacles(Node):
 
         # Transform them to odom frame
         self.start_point = PointStamped()
-        self.start_point.header.frame_id = 'base_footprint'
+        self.start_point.header.frame_id = 'evolo/base_link'
 
         self.start_point.point.x = x_obst_start
         self.start_point.point.y = y_obst_start
         self.start_point.point.z = 0.0
 
         self.goal_point = PointStamped()
-        self.goal_point.header.frame_id = 'base_footprint'
+        self.goal_point.header.frame_id = 'evolo/base_link'
 
         self.goal_point.point.x = x_obst_goal
         self.goal_point.point.y = y_obst_goal

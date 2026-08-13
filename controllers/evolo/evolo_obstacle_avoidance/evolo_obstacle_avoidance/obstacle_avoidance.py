@@ -140,7 +140,7 @@ class cbf_avoidance(Node):
         pose_stamped.pose = msg.pose.pose
 
         t = self._tf_buffer.lookup_transform(
-                target_frame="base_footprint",
+                target_frame="evolo/base_link",
                 source_frame=msg.header.frame_id,
                 time=Time(seconds=0),
                 timeout=Duration(seconds=1),
@@ -151,7 +151,7 @@ class cbf_avoidance(Node):
         self.obst_list[self.n_obst, 0] = tf_msg.pose.position.x
         self.obst_list[self.n_obst, 1] = tf_msg.pose.position.y
 
-        # Transform the velocity to base_footprint
+        # Transform the velocity to evolo/base_link
 
         q = t.transform.rotation
 
@@ -201,7 +201,7 @@ class cbf_avoidance(Node):
         self.rviz_obs_pub.publish(rviz_obs_array)
 
         self.obst_header = msg.header
-        self.obst_header.frame_id = "base_footprint"
+        self.obst_header.frame_id = "evolo/base_link"
 
     def vec2_directed_angle(self, v1, v2):
         """
