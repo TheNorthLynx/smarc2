@@ -43,10 +43,6 @@ class ghost_obstacles(Node):
             self.tf_buffer, self, spin_thread=True
         )
 
-        # Keep track of time
-        self.current_time = None
-        self.clock_sub = self.create_subscription(Clock, "/clock", self.clock_cb, 10)
-
         # Get obstacle info from QGIS
         self.obstacle_is_active = False
         self.ghost_sub = self.create_subscription(Twist, "/evolo/activate_ghost", self.ghost_cb, 10)
@@ -65,9 +61,6 @@ class ghost_obstacles(Node):
         self.logger.info(f"Sending obstacle messages to /{self.robot_name}/{self.obstacle_topic}")
 
         time.sleep(10.0)
-
-    def clock_cb(self, msg):
-        self.current_time = msg.clock
 
     def ghost_cb(self, msg):
         """Calculate the initial position of the obstacle"""
@@ -116,7 +109,7 @@ class ghost_obstacles(Node):
 
         while no_TF_goal or no_TF_start:
             try:
-                self.start_point.header.stamp = self.current_time
+                self.start_point.header.stamp = self.get_clock().now().to_msg()
                 self.start_point = self.tf_buffer.transform(
                     self.start_point,
                     self.target_frame,
@@ -133,7 +126,7 @@ class ghost_obstacles(Node):
                 time.sleep(3.0)
 
             try:
-                self.goal_point.header.stamp = self.current_time
+                self.goal_point.header.stamp = self.get_clock().now().to_msg()
                 self.goal_point = self.tf_buffer.transform(
                     self.goal_point,
                     self.target_frame,
@@ -167,7 +160,7 @@ class ghost_obstacles(Node):
 
             obstacle_msg = Odometry()
             obstacle_msg.header.frame_id = self.target_frame
-            obstacle_msg.header.stamp = self.current_time
+            obstacle_msg.header.stamp = self.get_clock().now().to_msg()
             obstacle_msg.header.stamp.sec -= 1
 
             obstacle_msg.pose.covariance[0] = self.radius
