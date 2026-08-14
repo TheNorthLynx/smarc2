@@ -72,6 +72,12 @@ class ghost_obstacles(Node):
         time_to_collision = msg.linear.z
         self.obstacle_angle = msg.angular.x
 
+        # Check for zero message
+        if abs(self.radius) < 0.01 and abs(self.obstacle_speed) < 0.01 and abs(time_to_collision) < 0.01 and abs(time_to_collision) < 0.01:
+            self.obstacle_is_active = False
+            self.logger.info("The ghost has been removed.")
+            return
+
         # Calculate start and end point of the obstacles path in Evolo frame
         evolo_speed = 4.5 # [m/s]
         self.t = 0 # [s]
@@ -109,7 +115,7 @@ class ghost_obstacles(Node):
 
         while no_TF_goal or no_TF_start:
             try:
-                self.start_point.header.stamp = self.get_clock().now().to_msg()
+                # self.start_point.header.stamp = self.get_clock().now().to_msg()
                 self.start_point = self.tf_buffer.transform(
                     self.start_point,
                     self.target_frame,
@@ -126,7 +132,7 @@ class ghost_obstacles(Node):
                 time.sleep(3.0)
 
             try:
-                self.goal_point.header.stamp = self.get_clock().now().to_msg()
+                # self.goal_point.header.stamp = self.get_clock().now().to_msg()
                 self.goal_point = self.tf_buffer.transform(
                     self.goal_point,
                     self.target_frame,
@@ -156,12 +162,15 @@ class ghost_obstacles(Node):
         """Calculate the updated position of the obstacle in odom frame, then send it"""
         if self.obstacle_is_active:
             self.t += 1.0
-            t_frac = self.t / self.t_tot
+            if abs(self.t_tot) > 0.01:
+                t_frac = self.t / self.t_tot
+            else:
+                t_frac = 0.0
 
             obstacle_msg = Odometry()
             obstacle_msg.header.frame_id = self.target_frame
-            obstacle_msg.header.stamp = self.get_clock().now().to_msg()
-            obstacle_msg.header.stamp.sec -= 1
+            # obstacle_msg.header.stamp = self.get_clock().now().to_msg()
+            # obstacle_msg.header.stamp.sec -= 1
 
             obstacle_msg.pose.covariance[0] = self.radius
             obstacle_msg.pose.covariance[7] = self.radius
@@ -183,7 +192,7 @@ class ghost_obstacles(Node):
 
         new_msg = TwistStamped()
         new_msg.header.frame_id = self.target_frame
-        new_msg.header.stamp = self.get_clock().now().to_msg()
+        # new_msg.header.stamp = self.get_clock().now().to_msg()
 
         new_msg.twist.linear.x = 4.5
         new_msg.twist.angular.z = w
