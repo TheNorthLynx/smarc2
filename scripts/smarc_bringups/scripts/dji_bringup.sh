@@ -1,6 +1,7 @@
 #! /bin/bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/tmux_layout.sh"
+source "$SCRIPT_DIR/get_ros_msg.sh"
 
 
 ROBOT_NAME=$1
@@ -33,20 +34,46 @@ if ! [[ "$HOME_ABOVE_WATER" =~ ^[0-9]+\.[0-9]+$ ]]; then
     echo "HOME_ABOVE_WATER is set to $HOME_ABOVE_WATER"
 fi
 
-NO_CAM=$3
-if [[ "$NO_CAM" == "no_cam" ]]; then
-    echo "Camera will be disabled in the dji_captain node. Useful for testing without a camera connected."
-    NO_CAM=True
+NO_CAM=False
+for arg in "$@"; do
+    if [[ "$arg" == "no_cam" ]]; then
+        echo "Camera will be disabled in the dji_captain node. Useful for testing without a camera connected."
+        NO_CAM=True
+        break
+    fi
+done
+
+FAKE_PSDK=False
+for arg in "$@"; do
+    if [[ "$arg" == "fake_it" ]]; then
+        echo "A fake version of PSDK will be launched. Useful for testing without a drone connected."
+        FAKE_PSDK=True
+        break
+    fi
+done
+
+
+if [[ "$(whoami)" == *"alars"* ]]; then
+    USE_SIM_TIME=False
+    CAM_CALIBRATION_FILE="z1_720p_cam_params.yaml"
 else
-    NO_CAM=False
+    USE_SIM_TIME=True
+    CAM_CALIBRATION_FILE="sim_1080p_cam_params.yaml"
 fi
 
-FAKE_IT_TILL_YOU_MAKE_IT=$4
-if [[ "$FAKE_IT_TILL_YOU_MAKE_IT" == "fake_it" ]]; then
-    FAKE_IT_TILL_YOU_MAKE_IT=True
-else
-    FAKE_IT_TILL_YOU_MAKE_IT=False
-fi
+
+TESTING_MODE=False
+for arg in "$@"; do
+    if [[ "$arg" == "testing" ]]; then
+        echo "Testing mode enabled!"
+        TESTING_MODE=True
+        FAKE_PSDK=True
+        NO_CAM=True
+        # use realtime, so we dont have to publish a clock in testing...
+        USE_SIM_TIME=False
+        break
+    fi
+done
 
 
 SESSION=${ROBOT_NAME}_bringup
@@ -60,19 +87,7 @@ if tmux has-session -t $SESSION 2>/dev/null; then
 fi
 
 
-if [[ "$(whoami)" == *"alars"* ]]; then
-    USE_SIM_TIME=False
-else
-    USE_SIM_TIME=True
-fi
 
-# if [[ $USE_SIM_TIME == "True" ]]; then
-#     # useful to make sure we don't accidentally connect to real hardware with the sim bringup
-#     # or when your pc has these set for the real thing and you dont want to swap around :,)
-#     export ROS_SUPER_CLIENT=""
-#     export ROS_DISCOVERY_SERVER=""
-#     export ROS_DOMAIN_ID=""
-# fi
 
 ########
 # PARAMS
@@ -99,6 +114,12 @@ EKF_STALENESS_SECONDS=3.0 # how old do we consider the ekf estimate usable
 ALARS_RECOVER_SETPOINT_TOLERANCE=0.2 
 WASP_BT_TASK_LIVELINESS_TIMEOUT=10.0 # Grace period before WASP BT drops stale action servers from available task list.
 
+
+# TOPICS
+ros_constants dji_topics dji_msgs Topics
+ros_constants smarc_topics smarc_msgs Topics
+
+
 # create a tmux session with a name
 tmux -2 new-session -d -x 220 -y 60 -s "$SESSION"
 
@@ -119,14 +140,15 @@ CAPTAIN_CMD="ros2 launch dji_captain alars_captain.launch \
     min_altitude_above_water:=$MIN_ALTITUDE_ABOVE_WATER \
     rope_length:=$HOOK_LINE_LENGTH"
     
-CAPTAIN_STATUS_CMD="ros2 topic echo /$ROBOT_NAME/status_str/captain_status std_msgs/msg/String --field data"
+
+CAPTAIN_STATUS_CMD="ros2 topic echo /$ROBOT_NAME/${dji_topics[CAPTAIN_STATUS_STR_TOPIC]} std_msgs/msg/String --field data"
 WRAPPER_CMD="ros2 launch psdk_wrapper wrapper.launch.py namespace:=/$ROBOT_NAME/wrapper"
 # DISCOVERY_SERVER_CMD="fast-discovery-server -i 0"
 DISCOVERY_SERVER_CMD="export ZENOH_CONFIG_OVERRIDE='listen/endpoints=[\"tcp/0.0.0.0:7447\"]' && ros2 run rmw_zenoh_cpp rmw_zenohd"
 SERVICE_CALLER_CMD="ros2 run dji_captain service_caller --ros-args -r __ns:=/$ROBOT_NAME -p use_sim_time:=$USE_SIM_TIME -p robot_name:=$ROBOT_NAME"
 ALARS_SERVICES_CMD="ros2 launch dji_captain alars_services.launch.py robot_name:=$ROBOT_NAME use_sim_time:=$USE_SIM_TIME"
 
-if [[ $FAKE_IT_TILL_YOU_MAKE_IT == "True" ]]; then
+if [[ $FAKE_PSDK == "True" ]]; then
     WRAPPER_CMD="ros2 run dji_captain psdk_faker --ros-args -r __ns:=/$ROBOT_NAME -p robot_name:=$ROBOT_NAME -p use_sim_time:=$USE_SIM_TIME"
 fi
 
@@ -188,18 +210,49 @@ ALARS_RECOVER_CMD="ros2 run alars alars_recover_action_server --ros-args -r __ns
 -p max_auv_age:=5.0 \
 -p max_buoy_age:=5.0"
 
+tmux_make_layout "$SESSION" AlarsActions "
+col(
+    var(ALARS_SEARCH_CMD),
+    var(ALARS_FOLLOW_AUV_CMD),
+    var(ALARS_RECOVER_CMD)
+)"
+
+
 ALARS_MOVE_TO_CMD="ros2 run alars alars_move_to_action_server --ros-args -r __ns:=/$ROBOT_NAME \
 -p robot_name:=$ROBOT_NAME \
 -p use_sim_time:=$USE_SIM_TIME"
 
+ESTIMATE_LENGTH_AND_DAMPING_CMD="ros2 launch alars estimate_length_and_damping_node_launch.py \
+robot_name:=$ROBOT_NAME \
+use_sim_time:=$USE_SIM_TIME"
 
-tmux_make_layout "$SESSION" MovingActions "
+HOOK_KF_CMD="ros2 launch sway_controller hook_kalman_filter_node_launch.py \
+robot_name:=$ROBOT_NAME \
+use_sim_time:=$USE_SIM_TIME \
+camera_calibration_file:=$CAM_CALIBRATION_FILE"
+
+# ENABLE_LQG=False flies the ZVD feedforward OPEN LOOP - the known-good
+# baseline, and the A/B test for whether the feedback helps. The first
+# closed-loop flight (2026-07-26) diverged, so start here when in doubt:
+#   ENABLE_LQG=False ./dji_bringup2.sh M350 5.0
+ENABLE_LQG=${ENABLE_LQG:-True}
+ALARS_MOVE_TO_DAMPED_CMD="ros2 launch alars alars_move_to_damped_server_launch.py \
+robot_name:=$ROBOT_NAME \
+use_sim_time:=$USE_SIM_TIME \
+enable_lqg:=$ENABLE_LQG"
+
+tmux_make_layout "$SESSION" MoveTo "
 col(
-    var(ALARS_SEARCH_CMD),
-    var(ALARS_FOLLOW_AUV_CMD),
-    var(ALARS_RECOVER_CMD),
-    var(ALARS_MOVE_TO_CMD)
+    row(
+        var(ALARS_MOVE_TO_CMD),
+        var(ALARS_MOVE_TO_DAMPED_CMD)
+    ),
+    row(
+        var(ESTIMATE_LENGTH_AND_DAMPING_CMD),
+        var(HOOK_KF_CMD)
+    )
 )"
+
 
 ############
 # 3 BTs
@@ -219,30 +272,37 @@ ALARS_BT_CMD="ros2 run alars alars_bt --ros-args -r __ns:=/$ROBOT_NAME \
 -p loaded_weight_kg:=$AUV_WEIGHT_KG \
 -p max_detection_age:=15.0"
 
-ALARS_BT_STATUS_CMD="ros2 topic echo ${ROBOT_NAME}/status_str/alars_bt std_msgs/msg/String --field data"
+ALARS_BT_STATUS_CMD="ros2 topic echo ${ROBOT_NAME}/${dji_topics[ALARS_BT_STATUS_STR_TOPIC]} std_msgs/msg/String --field data"
 
-ALARS_PING_SEARCH_CMD="ros2 run alars alars_ping_search_action_server --ros-args -r __ns:=/$ROBOT_NAME \
--p robot_name:=$ROBOT_NAME \
--p use_sim_time:=$USE_SIM_TIME"
+# This was fun for a demo, but unlikely to be useful for a long while...
+# ALARS_PING_SEARCH_CMD="ros2 run alars alars_ping_search_action_server --ros-args -r __ns:=/$ROBOT_NAME \
+# -p robot_name:=$ROBOT_NAME \
+# -p use_sim_time:=$USE_SIM_TIME"
 
-SUCCOR_CMD="ros2 run serial_ping_pkg modem_ping_estimator_node --ros-args \
--r __ns:=/$ROBOT_NAME \
--p use_sim_time:=$USE_SIM_TIME \
--p serial.port:=/dev/succorfish \
--p serial.baudrate:=9600 \
--p topics.own_latlon_topic:=/${ROBOT_NAME}/smarc/latlon \
--p topics.own_depth_topic:=/${ROBOT_NAME}/sensor/hook_depth \
--p teensy.own_modem_id:=\\'222\\' \
--p topics.geopoint_topic:=/${ROBOT_NAME}/sensor/succorfish_geopoint \
--p topics.marker_topic:=/${ROBOT_NAME}/rviz/succorfish_marker \
--p topics.map_frame:=${ROBOT_NAME}/map"
+# SUCCOR_CMD="ros2 run serial_ping_pkg modem_ping_estimator_node --ros-args \
+# -r __ns:=/$ROBOT_NAME \
+# -p use_sim_time:=$USE_SIM_TIME \
+# -p serial.port:=/dev/succorfish \
+# -p serial.baudrate:=9600 \
+# -p topics.own_latlon_topic:=/${ROBOT_NAME}/${smarc_topics[POS_LATLON_TOPIC]} \
+# -p topics.own_depth_topic:=/${ROBOT_NAME}/${dji_topics[HOOK_DEPTH_TOPIC]} \
+# -p teensy.own_modem_id:=\\'222\\' \
+# -p topics.geopoint_topic:=/${ROBOT_NAME}/${dji_topics[SUCCOR_ESTIMATE_TOPIC]} \
+# -p topics.marker_topic:=/${ROBOT_NAME}/rviz/succorfish_marker \
+# -p topics.map_frame:=${ROBOT_NAME}/map"
 # TODO these would better live in a py launchfile...
+
+# tmux_make_layout "$SESSION" BTs "
+# row(
+#     var(WASP_BT_CMD), 
+#     col(3:var(ALARS_BT_CMD), 1:var(ALARS_BT_STATUS_CMD)), 
+#     col(3:var(ALARS_PING_SEARCH_CMD), 1:var(SUCCOR_CMD))
+# )"
 
 tmux_make_layout "$SESSION" BTs "
 row(
     var(WASP_BT_CMD), 
-    col(3:var(ALARS_BT_CMD), 1:var(ALARS_BT_STATUS_CMD)), 
-    col(3:var(ALARS_PING_SEARCH_CMD), 1:var(SUCCOR_CMD))
+    col(3:var(ALARS_BT_CMD), 1:var(ALARS_BT_STATUS_CMD))
 )"
 
 
@@ -253,20 +313,13 @@ if [[ "$NO_CAM" == "True" ]]; then
     YOLO_CMD="echo 'Camera disabled, not launching YOLO detector'"
     PROJECTION_CMD="echo 'Camera disabled, not launching projection node'"
 else
-    YOLO_DEVICE=0
-    YOLO_THRESHOLD=0.5
-    YOLO_ENABLE=True
-    
-    CAM_CALIBRATION_FILE="z1_720p_cam_params.yaml"
-    YOLO_MODEL="yolo_model_2cls_may.pt" # Options: alars_labeling_training/trained_models
-    OBJECT_CONFIG_FILE="object_estimation.yaml" # Config file to edit each object's parameters for the EKF 
-    MARKERS_VISUALIZATION_ENABLE=True # Only used for debugging, since we cannot visualize new custom array for the poses in RViz
+    YOLO_DEVICE="cuda:0"
+
+    YOLO_MODEL="yolo_model_4cls_august.pt" # Options: alars_labeling_training/trained_models
+    PROJECTION_EKF_CONFIG="object_estimation.yaml" # Config file to edit each object's parameters for the EKF 
     
     if [[ $USE_SIM_TIME = "True" ]]; then
-        YOLO_DEVICE=cpu
-        CAM_CALIBRATION_FILE="sim_1080p_cam_params.yaml"
-        # seems to be doing better in sim
-        YOLO_MODEL="yolo_model_4cls_july.pt" # Updated for sim (+ hook, land_pad), prev was yolo_model_2cls_mixed.pt
+        YOLO_DEVICE="cpu"
     fi
 
     YOLO_CMD="ros2 launch yolo_bringup yolocustom.launch.py \
@@ -275,16 +328,17 @@ else
     model_subdir:=trained_models \
     model_file:=$YOLO_MODEL \
     device:=$YOLO_DEVICE \
-    threshold:=$YOLO_THRESHOLD \
-    enable:=$YOLO_ENABLE
+    threshold:=0.5 \
+    enable:=True \
+    input_image_topic:=/$ROBOT_NAME/${dji_topics[GIMBAL_CAMERA_RAW_TOPIC]} \
     "
 
     PROJECTION_CMD="ros2 launch auv_state_estimation multi_ekf_launch.py \
     robot_name:=$ROBOT_NAME \
     use_sim_time:=$USE_SIM_TIME \
     camera_calibration_file:=$CAM_CALIBRATION_FILE \
-    object_config_file:=$OBJECT_CONFIG_FILE \
-    visualization_enable:=$MARKERS_VISUALIZATION_ENABLE
+    object_config_file:=$PROJECTION_EKF_CONFIG \
+    visualization_enable:=True
     "
 fi
 
@@ -313,6 +367,8 @@ row(
     col(var(GEOFENCE_CMD), var(HUMAN_LOG_CMD), var(WAIT_CMD)),
     col(var(INTERNET_CHECKER_CMD))
 )"
+
+
 
 
 ############
@@ -348,13 +404,6 @@ else
         robot_name:=\"$ROBOT_NAME\" \
         use_sim_time:=$USE_SIM_TIME"
 fi
-# GSCAM_CONFIG_FISH="v4l2src device=/dev/insta360x4 ! image/jpeg,width=1920,height=1080,framerate=30/1 ! jpegdec ! videoconvert ! video/x-raw,format=BGR"
-# FISH_VIDEO_CMD="ros2 run gscam gscam_node --ros-args \
-#     -p gscam_config:=\"$GSCAM_CONFIG_FISH\" \
-#     -p frame_id:=fisheye_optical_frame \
-#     -p image_encoding:=rgb8 \
-#     -p sync_sink:=false \
-#     -r __ns:=/$ROBOT_NAME/fisheye_camera"
 
 if [[ $USE_SIM_TIME = "False" ]]; then
     tmux_make_layout "$SESSION" Drivers "
@@ -414,6 +463,12 @@ if [[ $USE_SIM_TIME = "True" ]]; then
 fi
 
 
-tmux -2 attach-session -t "$SESSION"
-tmux set-option -t "$SESSION" mouse on
-tmux select-window -t "$SESSION:Captains"
+if [[ $TESTING_MODE == "False" ]]; then
+    tmux -2 attach-session -t "$SESSION"
+    tmux set-option -t "$SESSION" mouse on
+    tmux select-window -t "$SESSION:Captains"
+else
+    exit 0    
+fi
+
+
