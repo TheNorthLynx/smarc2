@@ -256,8 +256,8 @@ col(
 
 #Obstacle avoidance
 if [ $OBSTACLE_AVOIDANCE == "True" ]; then
-    OBSTACLE_AVOIDANCE_CMD="ros2 launch evolo_obstacle_avoidance evolo_obstacle_avoidance_launch.py max_yaw_diff:="40.0" p_value:="0.5" alpha_value:="1.0" robot_radius:="2.0" cbf_opt_res:="11""
-    CLUSTERING_CMD="ros2 launch evolo_ghost_obstacles evolo_ghost_obstacles_launch.py p_value:="0.5""
+    OBSTACLE_AVOIDANCE_CMD="ros2 launch evolo_obstacle_avoidance evolo_obstacle_avoidance_launch.py max_yaw_diff:="40.0" p_value:="0.85" alpha_value:="1.0" robot_radius:="2.0" cbf_opt_res:="11""
+    CLUSTERING_CMD="ros2 launch evolo_ghost_obstacles evolo_ghost_obstacles_launch.py p_value:="0.85" evolo_speed:="4.5""
 
     # OBSTACLE_AVOIDANCE_CMD="ros2 run topic_tools relay /evolo/ctrl/twist_planned /evolo/ctrl/twist_setpoint"
     # OBSTACLE_AVOIDANCE_CMD="ros2 run evolo_obstacle_avoidance_simple_cpp evolo_obstacle_avoidance_cpp --ros-args -r __ns:=/evolo"

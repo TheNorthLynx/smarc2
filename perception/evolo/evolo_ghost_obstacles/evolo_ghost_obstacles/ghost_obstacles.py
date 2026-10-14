@@ -43,6 +43,9 @@ class ghost_obstacles(Node):
             self.tf_buffer, self, spin_thread=True
         )
 
+        # Set the estimated speed of Evolo
+        self.evolo_speed = float(self.get_parameter("evolo_speed").value) # [m/s]
+
         # Get obstacle info from QGIS
         self.obstacle_is_active = False
         self.ghost_sub = self.create_subscription(Twist, "/evolo/activate_ghost", self.ghost_cb, 10)
@@ -79,12 +82,12 @@ class ghost_obstacles(Node):
             return
 
         # Calculate start and end point of the obstacles path in Evolo frame
-        evolo_speed = 4.5 # [m/s]
+        # self.evolo_speed = 4.5 # [m/s]
         self.t = 0 # [s]
         self.t_tot = time_to_collision * 2
         self.logger.info(f"Radius: {self.radius}, time to collision: {time_to_collision}, angle: {self.obstacle_angle}, speed: {self.obstacle_speed}")
 
-        evolo_dist_to_col = evolo_speed * time_to_collision
+        evolo_dist_to_col = self.evolo_speed * time_to_collision
         obst_dist_to_col = self.obstacle_speed * time_to_collision
 
         x_obst_start = evolo_dist_to_col + obst_dist_to_col * np.cos(self.obstacle_angle)
@@ -157,6 +160,7 @@ class ghost_obstacles(Node):
         self.declare_parameter("obstacle_angle", 1.0)
         self.declare_parameter("obstacle_speed", 1.0)
         self.declare_parameter("p_value", 1.0)
+        self.declare_parameter("evolo_speed", 1.0)
 
     def update(self):
         """Calculate the updated position of the obstacle in odom frame, then send it"""
@@ -194,7 +198,7 @@ class ghost_obstacles(Node):
         new_msg.header.frame_id = self.target_frame
         # new_msg.header.stamp = self.get_clock().now().to_msg()
 
-        new_msg.twist.linear.x = 4.5
+        new_msg.twist.linear.x = 4.5 * 1.95 # In knots for unity
         new_msg.twist.angular.z = w
         # self.logger.info(f"Belayed message v: {4.5}, w: {w}")
         self.control_pub.publish(new_msg)

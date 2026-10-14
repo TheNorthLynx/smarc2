@@ -223,7 +223,7 @@ class twist_control(Node):
             speed_msg.data = float(target_speed)
             self.speed_pub.publish(speed_msg)
 
-            self.logger.info(f"Closed loop control")
+            self.logger.info(f"Closed loop control, yaw in {self.yaw_setpoint}, yaw out {steering_output}")
         else:
             self.logger.info(f"No setpoint or no feedback)")
 
